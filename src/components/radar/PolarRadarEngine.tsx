@@ -113,7 +113,7 @@ export default function PolarRadarEngine({
           <span className="font-semibold uppercase tracking-wider text-slate-400">
             Trade-Space Vector
           </span>
-          <h3 className="text-sm font-semibold text-slate-100">{pack.name}</h3>
+          <h3 className="text-sm font-semibold text-slate-100">{pack.name ?? pack.domainName ?? "Trade-Space Vector"}</h3>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">

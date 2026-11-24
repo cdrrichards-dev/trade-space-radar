@@ -15,6 +15,7 @@ export interface CouplingRule {
   axisIds?: string[];
   sourceAxis?: string;
   targetAxis?: string;
+  threshold?: number;
   relationship?: "inverse" | "positive" | string;
   label?: string;
   description?: string;
@@ -22,9 +23,15 @@ export interface CouplingRule {
 }
 
 export interface DomainPack {
-  id: string;
-  name: string;
+  id?: string;
+  domainId?: string;
+  name?: string;
+  domainName?: string;
   subtitle?: string;
+  tagline?: string;
+  mode?: string;
+  scaleMin?: number;
+  scaleMax?: number;
   defaultOriginLabel?: string;
   axes: RadarAxis[];
   couplingRules?: CouplingRule[];
