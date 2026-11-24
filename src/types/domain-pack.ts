@@ -1,20 +1,24 @@
 export interface RadarAxis {
-  key: string;
+  key?: string;
   id?: string;
   label: string;
-  shortLabel: string;
-  description: string;
+  shortLabel?: string;
+  description?: string;
+  weight?: number;
   defaultWeight?: number;
-  min: number;
-  max: number;
+  min?: number;
+  max?: number;
 }
 
 export interface CouplingRule {
   id: string;
-  sourceAxis: string;
-  targetAxis: string;
-  relationship: "inverse" | "positive";
-  note: string;
+  axisIds?: string[];
+  sourceAxis?: string;
+  targetAxis?: string;
+  relationship?: "inverse" | "positive" | string;
+  label?: string;
+  description?: string;
+  note?: string;
 }
 
 export interface DomainPack {

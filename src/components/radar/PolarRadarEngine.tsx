@@ -3,44 +3,38 @@
 import React, { useMemo, useRef, useState } from "react";
 import { DomainPack, RadarAxis } from "@/types/domain-pack";
 
-export interface RadarFacility {
-  id: string;
-  cms_provider_id: string;
-  name: string;
-  city: string;
-  state: string;
-  nci_or_coe_badge?: string | null;
-  normalized_scores: Record<string, number>;
-}
-
-interface PolarRadarEngineProps {
-  domainPack: DomainPack;
-  primaryFacility: RadarFacility | null;
-  comparisonFacility?: RadarFacility | null;
+export interface PolarRadarEngineProps {
+  pack: DomainPack;
+  primaryScores: Record<string, number>;
+  comparisonScores?: Record<string, number> | null;
+  primaryLabel?: string;
+  comparisonLabel?: string;
   weights?: Record<string, number>;
-  calibratedScores?: Record<string, number> | null;
-  onCalibrateScore?: (axisKey: string, newValue: number) => void;
+  onScoreChange?: (axisId: string, newValue: number) => void;
   size?: number;
 }
 
 export default function PolarRadarEngine({
-  domainPack,
-  primaryFacility,
-  comparisonFacility = null,
+  pack,
+  primaryScores,
+  comparisonScores = null,
+  primaryLabel = "Primary Facility",
+  comparisonLabel = "Comparison Facility",
   weights = {},
-  calibratedScores = null,
-  onCalibrateScore,
+  onScoreChange,
   size = 440,
 }: PolarRadarEngineProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [draggingAxis, setDraggingAxis] = useState<string | null>(null);
   const [hoveredAxis, setHoveredAxis] = useState<string | null>(null);
 
-  const axes = domainPack.axes;
+  const axes = pack.axes;
   const numAxes = axes.length;
   const center = size / 2;
   const maxRadius = size * 0.34;
   const rings = [2, 4, 6, 8, 10];
+
+  const getAxisId = (axis: RadarAxis) => axis.id ?? axis.key ?? axis.label;
 
   const getPoint = (axisIndex: number, value: number) => {
     const angle = (Math.PI * 2 * axisIndex) / numAxes - Math.PI / 2;
@@ -54,28 +48,27 @@ export default function PolarRadarEngine({
 
   const buildPolygonPoints = (scores: Record<string, number>) =>
     axes
-      .map((axis, idx) => {
-        const val = scores[axis.key] ?? 0;
+      .map((axis: RadarAxis, idx: number) => {
+        const key = getAxisId(axis);
+        const val = scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
         const pt = getPoint(idx, val);
         return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
       })
       .join(" ");
-
-  const activePrimaryScores = useMemo(() => {
-    if (!primaryFacility) return null;
-    return {
-      ...primaryFacility.normalized_scores,
-      ...(calibratedScores ?? {}),
-    };
-  }, [primaryFacility, calibratedScores]);
 
   const computeWeightedScore = (scores: Record<string, number> | null) => {
     if (!scores) return 0;
     let weightedSum = 0;
     let totalWeight = 0;
     for (const axis of axes) {
-      const w = weights[axis.key] ?? axis.defaultWeight ?? 1;
-      const val = scores[axis.key] ?? 0;
+      const key = getAxisId(axis);
+      const w =
+        weights[key] ??
+        (axis.key ? weights[axis.key] : undefined) ??
+        axis.weight ??
+        axis.defaultWeight ??
+        1;
+      const val = scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
       weightedSum += val * w;
       totalWeight += w;
     }
@@ -83,21 +76,20 @@ export default function PolarRadarEngine({
   };
 
   const primaryComposite = useMemo(
-    () => computeWeightedScore(activePrimaryScores),
-    [activePrimaryScores, axes, weights]
+    () => computeWeightedScore(primaryScores),
+    [primaryScores, axes, weights]
   );
 
   const comparisonComposite = useMemo(
-    () =>
-      comparisonFacility
-        ? computeWeightedScore(comparisonFacility.normalized_scores)
-        : 0,
-    [comparisonFacility, axes, weights]
+    () => (comparisonScores ? computeWeightedScore(comparisonScores) : 0),
+    [comparisonScores, axes, weights]
   );
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!draggingAxis || !onCalibrateScore || !svgRef.current) return;
-    const axisIndex = axes.findIndex((a) => a.key === draggingAxis);
+    if (!draggingAxis || !onScoreChange || !svgRef.current) return;
+    const axisIndex = axes.findIndex(
+      (a: RadarAxis) => getAxisId(a) === draggingAxis
+    );
     if (axisIndex === -1) return;
 
     const rect = svgRef.current.getBoundingClientRect();
@@ -111,7 +103,7 @@ export default function PolarRadarEngine({
     const projectedRadius = Math.max(0, Math.min(maxRadius, px * ux + py * uy));
     const rawScore = (projectedRadius / maxRadius) * 10;
     const snapped = Math.round(rawScore * 10) / 10;
-    onCalibrateScore(draggingAxis, snapped);
+    onScoreChange(draggingAxis, snapped);
   };
 
   return (
@@ -121,26 +113,20 @@ export default function PolarRadarEngine({
           <span className="font-semibold uppercase tracking-wider text-slate-400">
             Trade-Space Vector
           </span>
-          <h3 className="text-sm font-semibold text-slate-100">
-            {domainPack.name}
-          </h3>
+          <h3 className="text-sm font-semibold text-slate-100">{pack.name}</h3>
         </div>
         <div className="flex items-center gap-4">
-          {primaryFacility && (
-            <div className="text-right">
-              <div className="text-[11px] text-cyan-400">
-                {primaryFacility.name}
-              </div>
-              <div className="font-mono text-base font-bold text-cyan-300">
-                {primaryComposite.toFixed(2)}{" "}
-                <span className="text-xs font-normal text-slate-400">/ 10</span>
-              </div>
+          <div className="text-right">
+            <div className="text-[11px] text-cyan-400">{primaryLabel}</div>
+            <div className="font-mono text-base font-bold text-cyan-300">
+              {primaryComposite.toFixed(2)}{" "}
+              <span className="text-xs font-normal text-slate-400">/ 10</span>
             </div>
-          )}
-          {comparisonFacility && (
+          </div>
+          {comparisonScores && (
             <div className="border-l border-slate-800 pl-4 text-right">
               <div className="text-[11px] text-amber-400">
-                {comparisonFacility.name}
+                {comparisonLabel}
               </div>
               <div className="font-mono text-base font-bold text-amber-300">
                 {comparisonComposite.toFixed(2)}{" "}
@@ -159,9 +145,9 @@ export default function PolarRadarEngine({
         onPointerUp={() => setDraggingAxis(null)}
         onPointerLeave={() => setDraggingAxis(null)}
       >
-        {rings.map((ring) => {
+        {rings.map((ring: number) => {
           const ringPoints = axes
-            .map((_, idx) => {
+            .map((_: RadarAxis, idx: number) => {
               const pt = getPoint(idx, ring);
               return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
             })
@@ -179,15 +165,21 @@ export default function PolarRadarEngine({
         })}
 
         {axes.map((axis: RadarAxis, idx: number) => {
+          const axisId = getAxisId(axis);
           const outer = getPoint(idx, 10);
           const labelPt = getPoint(idx, 11.7);
-          const isHovered = hoveredAxis === axis.key;
-          const weightVal = weights[axis.key] ?? axis.defaultWeight ?? 1;
+          const isHovered = hoveredAxis === axisId;
+          const weightVal =
+            weights[axisId] ??
+            (axis.key ? weights[axis.key] : undefined) ??
+            axis.weight ??
+            axis.defaultWeight ??
+            1;
 
           return (
             <g
-              key={axis.key}
-              onMouseEnter={() => setHoveredAxis(axis.key)}
+              key={axisId}
+              onMouseEnter={() => setHoveredAxis(axisId)}
               onMouseLeave={() => setHoveredAxis(null)}
             >
               <line
@@ -207,7 +199,7 @@ export default function PolarRadarEngine({
                   isHovered ? "fill-cyan-300" : "fill-slate-300"
                 }`}
               >
-                {axis.shortLabel}
+                {axis.shortLabel ?? axis.label}
               </text>
               <text
                 x={labelPt.x}
@@ -222,46 +214,50 @@ export default function PolarRadarEngine({
           );
         })}
 
-        {comparisonFacility && (
+        {comparisonScores && (
           <polygon
-            points={buildPolygonPoints(comparisonFacility.normalized_scores)}
+            points={buildPolygonPoints(comparisonScores)}
             fill="rgba(251, 191, 36, 0.16)"
             stroke="#fbbf24"
             strokeWidth={2}
           />
         )}
 
-        {activePrimaryScores && (
+        {primaryScores && (
           <polygon
-            points={buildPolygonPoints(activePrimaryScores)}
+            points={buildPolygonPoints(primaryScores)}
             fill="rgba(34, 211, 238, 0.22)"
             stroke="#22d3ee"
             strokeWidth={2.5}
           />
         )}
 
-        {activePrimaryScores &&
-          axes.map((axis, idx) => {
-            const val = activePrimaryScores[axis.key] ?? 0;
+        {primaryScores &&
+          axes.map((axis: RadarAxis, idx: number) => {
+            const axisId = getAxisId(axis);
+            const val =
+              primaryScores[axisId] ??
+              (axis.key ? primaryScores[axis.key] : undefined) ??
+              0;
             const pt = getPoint(idx, val);
             return (
-              <g key={`handle-${axis.key}`}>
+              <g key={`handle-${axisId}`}>
                 <circle
                   cx={pt.x}
                   cy={pt.y}
-                  r={onCalibrateScore ? 6 : 4}
+                  r={onScoreChange ? 6 : 4}
                   fill="#0891b2"
                   stroke="#ecfeff"
                   strokeWidth={2}
                   className={
-                    onCalibrateScore
+                    onScoreChange
                       ? "cursor-grab active:cursor-grabbing"
                       : undefined
                   }
                   onPointerDown={(e) => {
-                    if (!onCalibrateScore) return;
+                    if (!onScoreChange) return;
                     e.stopPropagation();
-                    setDraggingAxis(axis.key);
+                    setDraggingAxis(axisId);
                   }}
                 />
               </g>
@@ -269,7 +265,7 @@ export default function PolarRadarEngine({
           })}
       </svg>
 
-      {onCalibrateScore && (
+      {onScoreChange && (
         <p className="mt-2 text-center text-[11px] text-slate-400">
           Drag any cyan vertex along its spoke to run a live what-if trade-space
           calibration.
