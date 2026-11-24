@@ -3,12 +3,22 @@
 import React, { useMemo, useRef, useState } from "react";
 import { DomainPack, RadarAxis } from "@/types/domain-pack";
 
+interface EntityLayer {
+  id: string;
+  name: string;
+  subtitle?: string;
+  badge?: string;
+  color?: string;
+  scores: Record<string, number>;
+}
+
 export interface PolarRadarEngineProps {
-  pack: DomainPack;
+  pack: DomainPack & {
+    primaryEntity?: EntityLayer;
+    comparisonEntity?: EntityLayer;
+  };
   primaryScores: Record<string, number>;
   comparisonScores?: Record<string, number> | null;
-  primaryLabel?: string;
-  comparisonLabel?: string;
   weights?: Record<string, number>;
   onScoreChange?: (axisId: string, newValue: number) => void;
   size?: number;
@@ -18,8 +28,6 @@ export default function PolarRadarEngine({
   pack,
   primaryScores,
   comparisonScores = null,
-  primaryLabel = "Primary Facility",
-  comparisonLabel = "Comparison Facility",
   weights = {},
   onScoreChange,
   size = 440,
@@ -33,6 +41,12 @@ export default function PolarRadarEngine({
   const center = size / 2;
   const maxRadius = size * 0.34;
   const rings = [2, 4, 6, 8, 10];
+
+  const activeComparisonScores =
+    comparisonScores ?? pack.comparisonEntity?.scores ?? null;
+  const primaryLabel = pack.primaryEntity?.name ?? "Primary Facility";
+  const comparisonLabel =
+    pack.comparisonEntity?.name ?? "Comparison Facility";
 
   const getAxisId = (axis: RadarAxis) => axis.id ?? axis.key ?? axis.label;
 
@@ -50,7 +64,8 @@ export default function PolarRadarEngine({
     axes
       .map((axis: RadarAxis, idx: number) => {
         const key = getAxisId(axis);
-        const val = scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
+        const val =
+          scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
         const pt = getPoint(idx, val);
         return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
       })
@@ -68,7 +83,8 @@ export default function PolarRadarEngine({
         axis.weight ??
         axis.defaultWeight ??
         1;
-      const val = scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
+      const val =
+        scores[key] ?? (axis.key ? scores[axis.key] : undefined) ?? 0;
       weightedSum += val * w;
       totalWeight += w;
     }
@@ -81,8 +97,9 @@ export default function PolarRadarEngine({
   );
 
   const comparisonComposite = useMemo(
-    () => (comparisonScores ? computeWeightedScore(comparisonScores) : 0),
-    [comparisonScores, axes, weights]
+    () =>
+      activeComparisonScores ? computeWeightedScore(activeComparisonScores) : 0,
+    [activeComparisonScores, axes, weights]
   );
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -113,7 +130,9 @@ export default function PolarRadarEngine({
           <span className="font-semibold uppercase tracking-wider text-slate-400">
             Trade-Space Vector
           </span>
-          <h3 className="text-sm font-semibold text-slate-100">{pack.name ?? pack.domainName ?? "Trade-Space Vector"}</h3>
+          <h3 className="text-sm font-semibold text-slate-100">
+            {pack.name ?? pack.domainName ?? "Trade-Space Vector"}
+          </h3>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-right">
@@ -123,7 +142,7 @@ export default function PolarRadarEngine({
               <span className="text-xs font-normal text-slate-400">/ 10</span>
             </div>
           </div>
-          {comparisonScores && (
+          {activeComparisonScores && (
             <div className="border-l border-slate-800 pl-4 text-right">
               <div className="text-[11px] text-amber-400">
                 {comparisonLabel}
@@ -214,9 +233,9 @@ export default function PolarRadarEngine({
           );
         })}
 
-        {comparisonScores && (
+        {activeComparisonScores && (
           <polygon
-            points={buildPolygonPoints(comparisonScores)}
+            points={buildPolygonPoints(activeComparisonScores)}
             fill="rgba(251, 191, 36, 0.16)"
             stroke="#fbbf24"
             strokeWidth={2}
