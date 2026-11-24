@@ -95,4 +95,186 @@ export default function PolarRadarEngine({
     [comparisonFacility, axes, weights]
   );
 
-  const handlePointerMove = (e
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!draggingAxis || !onCalibrateScore || !svgRef.current) return;
+    const axisIndex = axes.findIndex((a) => a.key === draggingAxis);
+    if (axisIndex === -1) return;
+
+    const rect = svgRef.current.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * size - center;
+    const py = ((e.clientY - rect.top) / rect.height) * size - center;
+
+    const angle = (Math.PI * 2 * axisIndex) / numAxes - Math.PI / 2;
+    const ux = Math.cos(angle);
+    const uy = Math.sin(angle);
+
+    const projectedRadius = Math.max(0, Math.min(maxRadius, px * ux + py * uy));
+    const rawScore = (projectedRadius / maxRadius) * 10;
+    const snapped = Math.round(rawScore * 10) / 10;
+    onCalibrateScore(draggingAxis, snapped);
+  };
+
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-slate-800 bg-slate-950/90 p-5 shadow-xl">
+      <div className="mb-3 flex w-full flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3 text-xs">
+        <div>
+          <span className="font-semibold uppercase tracking-wider text-slate-400">
+            Trade-Space Vector
+          </span>
+          <h3 className="text-sm font-semibold text-slate-100">
+            {domainPack.name}
+          </h3>
+        </div>
+        <div className="flex items-center gap-4">
+          {primaryFacility && (
+            <div className="text-right">
+              <div className="text-[11px] text-cyan-400">
+                {primaryFacility.name}
+              </div>
+              <div className="font-mono text-base font-bold text-cyan-300">
+                {primaryComposite.toFixed(2)}{" "}
+                <span className="text-xs font-normal text-slate-400">/ 10</span>
+              </div>
+            </div>
+          )}
+          {comparisonFacility && (
+            <div className="border-l border-slate-800 pl-4 text-right">
+              <div className="text-[11px] text-amber-400">
+                {comparisonFacility.name}
+              </div>
+              <div className="font-mono text-base font-bold text-amber-300">
+                {comparisonComposite.toFixed(2)}{" "}
+                <span className="text-xs font-normal text-slate-400">/ 10</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${size} ${size}`}
+        className="w-full max-w-[440px] touch-none select-none"
+        onPointerMove={handlePointerMove}
+        onPointerUp={() => setDraggingAxis(null)}
+        onPointerLeave={() => setDraggingAxis(null)}
+      >
+        {rings.map((ring) => {
+          const ringPoints = axes
+            .map((_, idx) => {
+              const pt = getPoint(idx, ring);
+              return `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+            })
+            .join(" ");
+          return (
+            <polygon
+              key={ring}
+              points={ringPoints}
+              fill="none"
+              stroke="#1e293b"
+              strokeWidth={ring === 10 ? 1.5 : 1}
+              strokeDasharray={ring === 10 ? undefined : "3 3"}
+            />
+          );
+        })}
+
+        {axes.map((axis: RadarAxis, idx: number) => {
+          const outer = getPoint(idx, 10);
+          const labelPt = getPoint(idx, 11.7);
+          const isHovered = hoveredAxis === axis.key;
+          const weightVal = weights[axis.key] ?? axis.defaultWeight ?? 1;
+
+          return (
+            <g
+              key={axis.key}
+              onMouseEnter={() => setHoveredAxis(axis.key)}
+              onMouseLeave={() => setHoveredAxis(null)}
+            >
+              <line
+                x1={center}
+                y1={center}
+                x2={outer.x}
+                y2={outer.y}
+                stroke={isHovered ? "#38bdf8" : "#334155"}
+                strokeWidth={isHovered ? 1.75 : 1}
+              />
+              <text
+                x={labelPt.x}
+                y={labelPt.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className={`text-[11px] font-medium ${
+                  isHovered ? "fill-cyan-300" : "fill-slate-300"
+                }`}
+              >
+                {axis.shortLabel}
+              </text>
+              <text
+                x={labelPt.x}
+                y={labelPt.y + 13}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                className="fill-slate-500 font-mono text-[9px]"
+              >
+                {weightVal.toFixed(2)}x
+              </text>
+            </g>
+          );
+        })}
+
+        {comparisonFacility && (
+          <polygon
+            points={buildPolygonPoints(comparisonFacility.normalized_scores)}
+            fill="rgba(251, 191, 36, 0.16)"
+            stroke="#fbbf24"
+            strokeWidth={2}
+          />
+        )}
+
+        {activePrimaryScores && (
+          <polygon
+            points={buildPolygonPoints(activePrimaryScores)}
+            fill="rgba(34, 211, 238, 0.22)"
+            stroke="#22d3ee"
+            strokeWidth={2.5}
+          />
+        )}
+
+        {activePrimaryScores &&
+          axes.map((axis, idx) => {
+            const val = activePrimaryScores[axis.key] ?? 0;
+            const pt = getPoint(idx, val);
+            return (
+              <g key={`handle-${axis.key}`}>
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r={onCalibrateScore ? 6 : 4}
+                  fill="#0891b2"
+                  stroke="#ecfeff"
+                  strokeWidth={2}
+                  className={
+                    onCalibrateScore
+                      ? "cursor-grab active:cursor-grabbing"
+                      : undefined
+                  }
+                  onPointerDown={(e) => {
+                    if (!onCalibrateScore) return;
+                    e.stopPropagation();
+                    setDraggingAxis(axis.key);
+                  }}
+                />
+              </g>
+            );
+          })}
+      </svg>
+
+      {onCalibrateScore && (
+        <p className="mt-2 text-center text-[11px] text-slate-400">
+          Drag any cyan vertex along its spoke to run a live what-if trade-space
+          calibration.
+        </p>
+      )}
+    </div>
+  );
+}
