@@ -8,6 +8,7 @@ export interface RadarAxis {
   defaultWeight?: number;
   min?: number;
   max?: number;
+  [key: string]: unknown;
 }
 
 export interface CouplingRule {
@@ -16,10 +17,12 @@ export interface CouplingRule {
   sourceAxis?: string;
   targetAxis?: string;
   threshold?: number;
+  operator?: string;
   relationship?: "inverse" | "positive" | string;
   label?: string;
   description?: string;
   note?: string;
+  [key: string]: unknown;
 }
 
 export interface DomainPack {
@@ -35,4 +38,5 @@ export interface DomainPack {
   defaultOriginLabel?: string;
   axes: RadarAxis[];
   couplingRules?: CouplingRule[];
+  [key: string]: unknown;
 }
