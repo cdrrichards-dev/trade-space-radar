@@ -183,22 +183,36 @@ export default function HomePage() {
       setLoading(true);
       setErrorMsg(null);
 
-      const supabase = getRadarCoreClient();
-      const { data, error } = await supabase
-        .from("facilities")
-        .select(
-          "id, cms_provider_id, name, city, state, zip_code, specialty_domain, nci_or_coe_badge, normalized_scores"
-        )
-        .order("name", { ascending: true });
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+          setErrorMsg(
+            `Missing Vercel env vars in client bundle (URL: ${Boolean(
+              supabaseUrl
+            )}, KEY: ${Boolean(
+              supabaseKey
+            )}). Add them in Vercel -> Settings -> Environment Variables and Redeploy.`
+          );
+          return;
+        }
+
+        const supabase = getRadarCoreClient();
+        const { data, error } = await supabase
+          .from("facilities")
+          .select(
+            "id, cms_provider_id, name, city, state, zip_code, specialty_domain, nci_or_coe_badge, normalized_scores"
+          )
+          .order("name", { ascending: true });
 
         if (error) {
           setErrorMsg(
-            `Supabase query failed: ${error.message}. Verify radar_core is exposed in Project Settings -> Data API.`
+            `Supabase query failed (${error.code ?? "ERR"}): ${error.message}`
           );
-          setLoading(false);
           return;
         }
-  
+
         if (data && data.length > 0) {
           setFacilities(data as FacilityRow[]);
         } else {
@@ -206,8 +220,14 @@ export default function HomePage() {
             "Connected to Supabase radar_core, but 0 facility rows were returned. Verify RLS SELECT policy or seed radar_core.facilities."
           );
         }
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error ? err.message : "Unknown client fetch exception";
+        setErrorMsg(`Client initialization error: ${message}`);
+      } finally {
         setLoading(false);
       }
+    }
 
     loadFacilities();
   }, []);
