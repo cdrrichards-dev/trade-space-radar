@@ -191,19 +191,23 @@ export default function HomePage() {
         )
         .order("name", { ascending: true });
 
-      if (error) {
-        setErrorMsg(
-          `Supabase query failed: ${error.message}. Verify radar_core is exposed in Project Settings -> Data API.`
-        );
+        if (error) {
+          setErrorMsg(
+            `Supabase query failed: ${error.message}. Verify radar_core is exposed in Project Settings -> Data API.`
+          );
+          setLoading(false);
+          return;
+        }
+  
+        if (data && data.length > 0) {
+          setFacilities(data as FacilityRow[]);
+        } else {
+          setErrorMsg(
+            "Connected to Supabase radar_core, but 0 facility rows were returned. Verify RLS SELECT policy or seed radar_core.facilities."
+          );
+        }
         setLoading(false);
-        return;
       }
-
-      if (data && data.length > 0) {
-        setFacilities(data as FacilityRow[]);
-      }
-      setLoading(false);
-    }
 
     loadFacilities();
   }, []);
